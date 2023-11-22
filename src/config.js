@@ -5,6 +5,7 @@ import mongoose from "mongoose";
 import { Server } from "socket.io";
 import http from "http";
 import multer from "multer";
+import cors from "cors";
 import UserRouter from "./routes/userRoute.js";
 import Chat from "./models/chatModel.js";
 
@@ -81,6 +82,7 @@ export async function startServer() {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
   app.use(multer().any());
+  app.use(cors());
 
   /// log all requests
   app.use((req, res, next) => {
