@@ -75,7 +75,7 @@ export const signUp = async (req, res) => {
       {
         id: newUser._id,
       },
-      process.env.JWT_SECRET_KEY
+      process?.env?.JWT_SECRET_KEY ?? "daishdasih213231sa"
     );
 
     let createdUser = { ...newUser._doc };
@@ -150,7 +150,7 @@ export const singIn = async (req, res) => {
       {
         id: userId,
       },
-      process.env.JWT_SECRET_KEY
+      process?.env?.JWT_SECRET_KEY ?? "daishdasih213231sa"
     );
 
     let userPosts = await Post.find({ userId: userId });
@@ -197,8 +197,7 @@ export const resetPassword = async (req, res) => {
       {
         id: newUser._id,
       },
-      process.env.JWT_SECRET_KEY
-    );
+      process?.env?.JWT_SECRET_KEY ?? "daishdasih213231sa"    );
 
     let createdUser = { ...newUser._doc };
     createdUser.access_token = token;

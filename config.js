@@ -7,10 +7,9 @@ import http from "http";
 import multer from "multer";
 import UserRouter from "./routes/userRoute.js";
 import Chat from "./models/chatModel.js";
-import User from "./models/userModel.js";
 
-const port = process.env.PORT || 3030;
-const dbUrl = process.env.DB_URL;
+const port = process?.env?.PORT ?? 3030;
+const dbUrl = process?.env?.DB_URL ?? "mongodb+srv://Deependra1999:Z1ZWVlMvcAFQsu2u@cluster0.4nkid.mongodb.net/Surplus";
 const app = express();
 
 export async function startServer() {
