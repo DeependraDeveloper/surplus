@@ -10,7 +10,7 @@ import Chat from "./models/chatModel.js";
 
 const port = process?.env?.PORT ?? 5000;
 const dbUrl = process?.env?.DB_URL ?? "mongodb+srv://Deependra1999:Z1ZWVlMvcAFQsu2u@cluster0.4nkid.mongodb.net/Surplus";
-const app = express();
+export const app = express();
 
 export async function startServer() {
   mongoose.set("strictQuery", false);
@@ -87,6 +87,10 @@ export async function startServer() {
     console.log(`${req.method} ${req.path} ${req.ip}`);
     next();
   });
+
+  app.get("/health",(req,res)=>{
+    res.send("ok");
+  })
 
   app.use("/api/v1/user", UserRouter);
 
