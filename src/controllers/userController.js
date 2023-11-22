@@ -491,8 +491,11 @@ export const getPostsNearBy = async (req, res) => {
     let lat = req.query.lat ?? 0.0;
     let long = req.query.long ?? 0.0;
     let userId = req.query.userId ?? "";
+    let range = req.query.range ?? 5000;
 
-    console.log("get near by posts api called", req.query);
+    range = range * 1000;
+
+    console.log("get near by posts api called", req.query,range);
 
     if (!lat || !long) throw new Error("Latitude and Longitude is required !.");
 
@@ -504,7 +507,7 @@ export const getPostsNearBy = async (req, res) => {
             coordinates: [parseFloat(long), parseFloat(lat)],
           },
           key: "location",
-          maxDistance: 4220,
+          maxDistance: range,
           distanceField: "dist.calculated",
           spherical: true,
         },
