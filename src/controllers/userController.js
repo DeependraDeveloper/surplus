@@ -272,6 +272,7 @@ export const connect = async (req, res) => {
     let findChat = await Chat.findOne({ from, post, to });
 
     if (findChat) {
+      console.log("fouind chat")
       return res.status(201).json({
         message: "Chat Initiated..!",
       });
@@ -279,39 +280,42 @@ export const connect = async (req, res) => {
 
     let findChatAgain = await Chat.findOne({
       from: {
-        $or: [from, to],
+        $in: [from, to],
       },
       to: {
-        $or: [from, to],
+        $in: [from, to],
       },
     });
 
     if (findChatAgain) {
+      console.log("fouind chat again")
+
       return res.status(201).json({
         message: "Chat Initiated..!",
       });
     }
-    
+
     let createChat = await Chat.create({
       from,
       post,
       to,
     });
 
-    let findTo = await User.findById(to).select("devices");
-    let lastDevice = findTo.devices[findTo.devices.length - 1];
-    let findDevice = await DeviceInfo.findById(lastDevice);
-    let token = findDevice.deviceToken;
-    let title = "New Message";
-    let body = "You have received a new message";
-    let type = "chat";
+    // let findTo = await User.findById(to).select("devices");
+    // let lastDevice = findTo.devices[findTo.devices.length - 1];
+    // let findDevice = await DeviceInfo.findById(lastDevice);
+    // let token = findDevice.deviceToken;
+    // let title = "New Message";
+    // let body = "You have received a new message";
+    // let type = "chat";
 
-    await sendNotification(token, title, body, type);
+    // await sendNotification(token, title, body, type);
 
     res.status(201).json({
       message: "Chat Initiated..!",
     });
   } catch (err) {
+    console.log(err);
     return res.status(500).json({
       message: err.message,
     });
