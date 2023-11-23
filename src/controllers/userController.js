@@ -197,7 +197,8 @@ export const resetPassword = async (req, res) => {
       {
         id: newUser._id,
       },
-      process?.env?.JWT_SECRET_KEY ?? "daishdasih213231sa"    );
+      process?.env?.JWT_SECRET_KEY ?? "daishdasih213231sa"
+    );
 
     let createdUser = { ...newUser._doc };
     createdUser.access_token = token;
@@ -276,6 +277,21 @@ export const connect = async (req, res) => {
       });
     }
 
+    let findChatAgain = await Chat.findOne({
+      from: {
+        $or: [from, to],
+      },
+      to: {
+        $or: [from, to],
+      },
+    });
+
+    if (findChatAgain) {
+      return res.status(201).json({
+        message: "Chat Initiated..!",
+      });
+    }
+    
     let createChat = await Chat.create({
       from,
       post,
@@ -495,7 +511,7 @@ export const getPostsNearBy = async (req, res) => {
 
     range = range * 1000;
 
-    console.log("get near by posts api called", req.query,range);
+    console.log("get near by posts api called", req.query, range);
 
     if (!lat || !long) throw new Error("Latitude and Longitude is required !.");
 
