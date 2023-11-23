@@ -8,9 +8,12 @@ import multer from "multer";
 import cors from "cors";
 import UserRouter from "./routes/userRoute.js";
 import Chat from "./models/chatModel.js";
+import { s3Uploader } from "./helpers/aws.js";
 
 const port = process?.env?.PORT ?? 5000;
-const dbUrl = process?.env?.DB_URL ?? "mongodb+srv://Deependra1999:Z1ZWVlMvcAFQsu2u@cluster0.4nkid.mongodb.net/Surplus";
+const dbUrl =
+  process?.env?.DB_URL ??
+  "mongodb+srv://Deependra1999:Z1ZWVlMvcAFQsu2u@cluster0.4nkid.mongodb.net/Surplus";
 export const app = express();
 
 export async function startServer() {
@@ -33,7 +36,7 @@ export async function startServer() {
 
         // Retrieve the chat document based on the chatId
         const foundChat = await Chat.findById(chatId);
-        console.log(foundChat);
+        // console.log(foundChat);
 
         if (!foundChat) {
           // Handle if the chat document doesn't exist
@@ -51,11 +54,30 @@ export async function startServer() {
 
     socket.on("sendMessage", async ({ chatId, message, sender }) => {
       try {
-        console.log(`User sent message in chat ${chatId}: ${message}`);
+       // console.log(`User sent message in chat ${chatId}: ${message} ${sender}`);
+
+        /// check whether the content is string message or file as Uint8 from client
+
+        let content;
+        if (typeof message === "string") {
+          content = message;
+        } else {
+          let listimage = [];
+          for(let msg of message){
+          let converted_image = Buffer.from(msg, "base64");
+          // console.log("convered image",converted_image);
+          let url = await s3Uploader(converted_image,`surplus/${chatId}${Date.now().toString()}.png`);
+         // console.log("url",url);
+          listimage.push(url.toString());
+          }
+          content = listimage.join(", ");
+         // console.log("content",content);
+        }
+
         // Update the chat document with the new message
         const newMessage = {
           sender,
-          content: message,
+          content: content,
           timestamp: Date.now(),
         };
 
@@ -65,8 +87,8 @@ export async function startServer() {
           { new: true }
         );
 
-
         let messages = updatedChat.messages;
+
 
         // Emit the new message to all users in the chat room
         io.to(chatId).emit("message", messages);
@@ -90,9 +112,9 @@ export async function startServer() {
     next();
   });
 
-  app.get("/health",(req,res)=>{
+  app.get("/health", (req, res) => {
     res.send("ok");
-  })
+  });
 
   app.use("/api/v1/user", UserRouter);
 

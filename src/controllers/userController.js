@@ -457,7 +457,7 @@ export const updatePost = async (req, res) => {
 
     for (let i = 0; i < file.length; i++) {
       const data = file[i];
-      const result = await s3Uploader(data);
+      const result = await s3Uploader(data,);
       pics.push(result);
     }
 
