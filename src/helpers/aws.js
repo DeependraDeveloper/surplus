@@ -44,15 +44,15 @@ var s3 = new AWS.S3({
   httpOptions: { timeout: 30000, connectTimeout: 5000 },
   apiVersions: "latest",
   region: "ap-south-1",
-  accessKeyId:'AKIAWEECXDHSELEBJWW4',
-  secretAccessKey: "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",
+  accessKeyId:  "AKIA3SABUUHKIXABJ5JV", // 'AKIAWEECXDHSELEBJWW4'
+  secretAccessKey:"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",// "xEJYOyp5P5DxtUvmZwKq6V5pnxmwu+IxDjTEH77X"
 });
 
 //! upload file to s3 bucket
 export function s3Uploader(data, folder) {
   return new Promise((resolve, reject) => {
     var params = {
-      Bucket: "ting-ting",
+      Bucket: "trade-platform",  // "ting-ting"
       Key: folder,
       Body: data,
       ACL: "public-read",
