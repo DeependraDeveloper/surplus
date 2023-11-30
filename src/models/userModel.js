@@ -5,11 +5,7 @@ const userSchema = new mongoose.Schema(
     profilePic : {
       type: String,
       required: false,
-      default:""
-    },
-    blessed: {
-      type: Number,
-      default: 0,
+      default:"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQQQP-WUs1TzGz2NLydG71XHCPqChIJe2A2Tg&usqp=CAU"
     },
     name: {
       type: String,
@@ -34,6 +30,11 @@ const userSchema = new mongoose.Schema(
     isDeleted: {
         type: Boolean,
         default: false,
+    },
+    range : {
+      type: Number,
+      required: false,
+      default: 5,
     },
     location: {
         type: { type: String, required: true },

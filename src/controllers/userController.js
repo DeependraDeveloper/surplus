@@ -1,13 +1,21 @@
-import Post from "../models/postModel.js";
-import { s3Uploader } from "../helpers/aws.js";
-import User from "../models/userModel.js";
-import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
+dotenv.config();
+
+// Models
+import Post from "../models/postModel.js";
 import DeviceInfo from "../models/deviceInfoModel.js";
 import Chat from "../models/chatModel.js";
+import User from "../models/userModel.js";
+
+// Helpers Functions
+import { s3Uploader } from "../helpers/aws.js";
 import { sendNotification } from "../helpers/pushNotification.js";
-dotenv.config();
+
+// Packages
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+
+
 
 //! USER APIS
 /// register a new user
@@ -227,7 +235,7 @@ export const updateUser = async (req, res) => {
     if (file) {
       for (let i = 0; i < file.length; i++) {
         const data = file[i];
-        const result = await s3Uploader(data);
+        const result = await s3Uploader(data,`surplus/${userId}${Date.now().toString()}`, "api");
         uploadImages.push(result);
       }
     }
@@ -246,6 +254,7 @@ export const updateUser = async (req, res) => {
         name,
         email,
         phone,
+       
       };
     }
 
@@ -301,15 +310,25 @@ export const connect = async (req, res) => {
       to,
     });
 
-    // let findTo = await User.findById(to).select("devices");
-    // let lastDevice = findTo.devices[findTo.devices.length - 1];
-    // let findDevice = await DeviceInfo.findById(lastDevice);
-    // let token = findDevice.deviceToken;
-    // let title = "New Message";
-    // let body = "You have received a new message";
-    // let type = "chat";
+    let findTo = await User.findById(to).select("devices") ?? [];
+    let lastDevice = findTo?.devices[findTo?.devices?.length - 1];
+    let findDevice = await DeviceInfo.findById(lastDevice) ?? {};
+    let token = findDevice?.deviceToken ?? "";
+    let title = "New Message";
+    let body = "You have received a new message";
+    let type = "chat";
 
-    // await sendNotification(token, title, body, type);
+    await sendNotification(token, title, body, type)
+          .then((result) =>
+            console.log(
+              "New Message notification sent",
+              result
+            )
+          )
+          .catch((err) =>
+            console.log("Push Deliver notification to store Error", err)
+          );
+      
 
     res.status(201).json({
       message: "Chat Initiated..!",
@@ -360,13 +379,21 @@ export const createPost = async (req, res) => {
     if (!userId || !title || !description)
       throw new Error("All fields are required!");
 
+      if(lat == 0 || long == 0) {
+        let findUser = await User.findById(userId);
+        lat = findUser?.location?.coordinates[1] ?? 0.0;
+        long = findUser?.location?.coordinates[2] ?? 0.0;
+      }
+  
+
     let file = req.files;
     // console.log(file);
     let pics = [];
 
     for (let i = 0; i < file.length; i++) {
       const data = file[i];
-      const result = await s3Uploader(data);
+      const result = await s3Uploader(data,`surplus/${userId}${Date.now().toString()}.png`, "api");
+      // console.log(result);
       pics.push(result);
     }
 
@@ -383,37 +410,46 @@ export const createPost = async (req, res) => {
       },
     });
 
-    // let findNearByUsers = await User.aggregate([
-    //   {
-    //     $geoNear: {
-    //       near: {
-    //         type: "Point",
-    //         coordinates: [parseFloat(long), parseFloat(lat)],
-    //       },
-    //       key: "location",
-    //       maxDistance: 4220,
-    //       distanceField: "dist.calculated",
-    //       spherical: true,
-    //     },
-    //   },
-    // ]);
+    let findNearByUsers = await User.aggregate([
+      {
+        $geoNear: {
+          near: {
+            type: "Point",
+            coordinates: [parseFloat(long), parseFloat(lat)],
+          },
+          key: "location",
+          maxDistance: 4220,
+          distanceField: "dist.calculated",
+          spherical: true,
+        },
+      },
+    ]) ?? [];
 
-    // let devices = [];
+    let devices = [];
 
-    // for (let user of findNearByUsers) {
-    //   let userDevices = user.devices;
-    //   let lastDevice = userDevices[userDevices.length - 1];
-    //   devices.push(lastDevice);
-    // }
+    for (let user of findNearByUsers) {
+      let userDevices = user.devices  ?? [];
+      let lastDevice = userDevices[userDevices.length - 1];
+      if (lastDevice) devices.push(lastDevice);
+    }
 
-    // for (let device of devices) {
-    //   let findDevice = await DeviceInfo.findById(device);
-    //   let token = findDevice.deviceToken;
-    //   let title = "New Blessing";
-    //   let body = "New blessing posted near you";
-    //   let type = "post";
-    //   await sendNotification(token, title, body, type);
-    // }
+    for (let device of devices) {
+      let findDevice = await DeviceInfo.findById(device) ?? {};
+      let token = findDevice?.deviceToken;
+      let title = "New Blessing";
+      let body = "New blessing posted near you";
+      let type = "post";
+      await sendNotification(token, title, body, type)
+          .then((result) =>
+            console.log(
+               "New Blessing notification sent",
+              result
+            )
+          )
+          .catch((err) =>
+            console.log("Push Deliver notification to store Error", err)
+          );
+    }
 
     return res.status(201).json(newPost);
   } catch (err) {
@@ -457,7 +493,7 @@ export const updatePost = async (req, res) => {
 
     for (let i = 0; i < file.length; i++) {
       const data = file[i];
-      const result = await s3Uploader(data,);
+      const result = await s3Uploader(data,`surplus/${postId}${Date.now().toString()}`, "api");
       pics.push(result);
     }
 
@@ -490,8 +526,13 @@ export const updatePost = async (req, res) => {
 // delete post
 export const deletePost = async (req, res) => {
   try {
+    const {postId} = req.body;
+
+    console.log("delete post api called", req.body);
+
+
     let post = await Post.findOneAndUpdate(
-      { _id: req.body.id },
+      { _id: postId },
       { isDeleted: true },
       { new: true }
     );
@@ -513,11 +554,31 @@ export const getPostsNearBy = async (req, res) => {
     let userId = req.query.userId ?? "";
     let range = req.query.range ?? 5000;
 
+    if(range){
+      let updateUserRange = await User.findOneAndUpdate(
+        { _id: userId },
+        { range: range },
+        { new: true }
+      );
+    }
+
     range = range * 1000;
 
     console.log("get near by posts api called", req.query, range);
 
-    if (!lat || !long) throw new Error("Latitude and Longitude is required !.");
+    if (parseFloat(lat) === 0.0 && parseFloat(long) === 0.0) {
+      // Your logic here to handle lat and long being 0.0
+      console.log("Bonuse called, changing the lat long--------------------------------")
+      let findUser = await User.findById(userId);
+      lat = findUser?.location?.coordinates[1] ?? 0.0;
+      long = findUser?.location?.coordinates[0] ?? 0.0;
+
+      console.log("lat long overrinden bonus", lat, long);
+
+    }
+
+    
+    
 
     let posts = await Post.aggregate([
       {
@@ -532,14 +593,9 @@ export const getPostsNearBy = async (req, res) => {
           spherical: true,
         },
       },
-      {
-        $sort: {
-          createdAt: -1,
-        },
-      },
     ]);
 
-    posts = posts.filter((post) => post.userId != userId);
+    posts = posts.filter((post) => post.userId != userId && post.isDeleted == false);
 
     return res.status(200).json(posts);
   } catch (err) {
@@ -559,6 +615,9 @@ export const searchPost = async (req, res) => {
 
     console.log("search post api called", req.query);
 
+
+    let findUser = await User.findById(userId);
+
     if (
       name?.length == 0 ||
       name == "" ||
@@ -570,6 +629,14 @@ export const searchPost = async (req, res) => {
       return res.status(200).json([]);
     }
 
+    if (parseFloat(lat) === 0.0 && parseFloat(long) === 0.0) {
+      // Your logic here to handle lat and long being 0.0
+      console.log("Bonuse called, changing the lat long")
+      let findUser = await User.findById(userId);
+      lat = findUser?.location?.coordinates[1] ?? 0.0;
+      long = findUser?.location?.coordinates[0] ?? 0.0;
+    }
+
     let posts = await Post.aggregate([
       {
         $geoNear: {
@@ -578,7 +645,7 @@ export const searchPost = async (req, res) => {
             coordinates: [parseFloat(long), parseFloat(lat)],
           },
           key: "location",
-          maxDistance: 4220,
+          maxDistance: (findUser?.range * 1000) ?? 5000,
           distanceField: "dist.calculated",
           spherical: true,
         },
@@ -627,104 +694,44 @@ export const blessPost = async (req, res) => {
         { new: true }
       );
 
-      await User.findOneAndUpdate(
-        { _id: findPost.userId },
-        { $inc: { blessed: -1 } },
-        { new: true }
-      );
-
       return res.status(200).json({ message: "Blessed removed successfully" });
     }
 
     console.log("Blessed by user");
-    await Post.findOneAndUpdate(
+   await Post.findOneAndUpdate(
       { _id: postId },
       { $addToSet: { blessedBy: userId } },
       { new: true }
     );
 
-    // let toUser = await User.findOneAndUpdate(
-    //   { _id: findPost.userId },
-    //   { $inc: { blessed: 1 } },
-    //   { new: true }
-    // );
-
-    // let devices = toUser.devices;
-
-    // let lastDevice = devices[devices.length - 1];
-
-    // let findDevice = await DeviceInfo.findById(lastDevice);
-
-    // let token = findDevice.deviceToken;
-    // console.log("token", token);
-
-    // let title = "Blessed";
-
-    // let body = "You have been blessed by a user";
-
-    // let type = "bless";
-
-    // await sendNotification(token, title, body, type);
-
-    return res.status(200).json({ message: "Blessed successfully" });
-  } catch (err) {
-    return res.status(500).json({
-      message: err.message,
-    });
-  }
-};
-
-//! ADMIN APIS
-/// get all users
-export const getAllUsers = async (req, res) => {
-  try {
-    const users = await User.find();
-    res.status(200).json({
-      results: users.length,
-      data: users,
-    });
-  } catch (err) {
-    return res.status(500).json({
-      message: err.message,
-    });
-  }
-};
-
-/// get a user
-export const getUser = async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id);
-
-    if (!user) throw new Error("User not found");
-
-    let posts = await Post.find({ userId: req.params.id, isDeleted: false });
-
-    if (!posts) posts = [];
-
-    let result = { ...user._doc };
-
-    result.posts = posts;
-
-    res.status(200).json(result);
-  } catch (err) {
-    return res.status(500).json({
-      message: err.message,
-    });
-  }
-};
-
-/// delete a user
-export const deleteUser = async (req, res) => {
-  try {
-    let deleteUser = await User.findOneAndUpdate(
-      { _id: req.params.id },
-      { isDeleted: true },
-      { new: true }
+    let toUser = await User.findOne(
+      { _id: findPost.userId }
     );
-    if (!deleteUser) throw new Error("User not found");
-    res
-      .status(200)
-      .json({ message: "User deleted successfully", data: deleteUser });
+
+    let devices = toUser?.devices ?? [];
+
+    let lastDevice = devices[devices.length - 1];
+
+    let findDevice = await DeviceInfo.findById(lastDevice) ?? {};
+
+    let token = findDevice?.deviceToken ?? "";
+    console.log("token", token);
+
+    let title = "Blessed";
+    let body = "You have been blessed by a user";
+    let type = "bless";
+
+    await sendNotification(token, title, body, type)
+          .then((result) =>
+            console.log(
+              "User blessed notification sent !",
+              result
+            )
+          )
+          .catch((err) =>
+            console.log("Push Deliver notification to store Error", err)
+          );
+    return res.status(200).json({ message: "Blessed successfully" });
   } catch (err) {
     return res.status(500).json({
       message: err.message,
@@ -735,7 +742,10 @@ export const deleteUser = async (req, res) => {
 // get post by id
 export const getPost = async (req, res) => {
   try {
-    let post = await Post.findById(req.params.id);
+    let post = await Post.findById(req.query.postId)
+
+    console.log("get post api called", req.query.postId);
+
     if (!post) throw new Error("Post not found");
 
     return res.status(200).json(post);
@@ -746,27 +756,22 @@ export const getPost = async (req, res) => {
   }
 };
 
-// send notification
 
-export const sendNotificationTest = async (req, res) => {
-  try {
-    let token =
-      "fZqhqWfQQ6Svg40mJF85ug:APA91bEfFDI0mr-nvVv1NeF8dc0RmW3NZgZtV9RnYrzT3tn5ffzDXAPaXo9Ds5PlbbxdiBuJWiwroCH7b6djsoSntVCmTd1W0YiaafP-f61vmljXFSq-HaZTk1p0TyePCzNFclSS5dpo";
+// get user by id
+export const getUserById = async (req, res) => {
+  try{
 
-    let title = "Test Notification";
-    let body = "This is a test notification";
-    let type = "test";
+    const {userId} = req.query;
 
-    await sendNotification(token, title, body, type)
-      .then((response) => {
-        console.log("response", response);
-      })
-      .catch((error) => {
-        console.log("error", error);
-      });
+    console.log("get user by id api called", req.query);
 
-    return res.status(200).json({ message: "Notification sent successfully" });
-  } catch (err) {
+    let user = await User.findById(userId);
+
+    if(!user) throw new Error("User not found");
+
+    return res.status(200).json(user);
+
+  }catch(err){
     return res.status(500).json({
       message: err.message,
     });
