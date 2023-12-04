@@ -2,13 +2,16 @@ import express from 'express';
 
 const AdminRouter = express.Router();
 
-import { filterBadWords,deleteUser,getAllPosts,getAllUsers} from '../controllers/adminController.js';
+import { loginAsAdmin,filterBadWords,getAllPosts,getAllUsers,deletePost,deleteUser} from '../controllers/adminController.js';
 
 
 AdminRouter.post('/filter', filterBadWords);
+AdminRouter.post('/login', loginAsAdmin);
 AdminRouter.get('/users', getAllUsers);
 AdminRouter.get('/posts', getAllPosts);
 AdminRouter.delete('/user/:id', deleteUser);
+AdminRouter.delete('/block/post', deletePost);
+AdminRouter.delete('/block/user', deleteUser);
 
 
 

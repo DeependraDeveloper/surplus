@@ -15,8 +15,6 @@ import { sendNotification } from "../helpers/pushNotification.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
-
-
 //! USER APIS
 /// register a new user
 export const signUp = async (req, res) => {
@@ -226,6 +224,12 @@ export const updateUser = async (req, res) => {
 
     console.log("update user api called", req.body);
 
+    let findUser = await User.findById(userId);
+
+    if (!findUser) throw new Error("User not found");
+
+    if (findUser.isDeleted) throw new Error("User is blocked");
+
     let file = req.files;
 
     console.log("update user file", file);
@@ -235,7 +239,11 @@ export const updateUser = async (req, res) => {
     if (file) {
       for (let i = 0; i < file.length; i++) {
         const data = file[i];
-        const result = await s3Uploader(data,`surplus/${userId}${Date.now().toString()}`, "api");
+        const result = await s3Uploader(
+          data,
+          `surplus/${userId}${Date.now().toString()}`,
+          "api"
+        );
         uploadImages.push(result);
       }
     }
@@ -254,7 +262,6 @@ export const updateUser = async (req, res) => {
         name,
         email,
         phone,
-       
       };
     }
 
@@ -276,12 +283,18 @@ export const connect = async (req, res) => {
   try {
     const { from, post, to } = req.body;
 
+    let findUser = await User.findById(from);
+
+    if (!findUser) throw new Error("User not found");
+
+    if (findUser.isDeleted) throw new Error("User is blocked");
+
     console.log("connect api called", req.body);
 
     let findChat = await Chat.findOne({ from, post, to });
 
     if (findChat) {
-      console.log("fouind chat")
+      console.log("fouind chat");
       return res.status(201).json({
         message: "Chat Initiated..!",
       });
@@ -297,7 +310,7 @@ export const connect = async (req, res) => {
     });
 
     if (findChatAgain) {
-      console.log("fouind chat again")
+      console.log("fouind chat again");
 
       return res.status(201).json({
         message: "Chat Initiated..!",
@@ -310,25 +323,19 @@ export const connect = async (req, res) => {
       to,
     });
 
-    let findTo = await User.findById(to).select("devices") ?? [];
+    let findTo = (await User.findById(to).select("devices")) ?? [];
     let lastDevice = findTo?.devices[findTo?.devices?.length - 1];
-    let findDevice = await DeviceInfo.findById(lastDevice) ?? {};
+    let findDevice = (await DeviceInfo.findById(lastDevice)) ?? {};
     let token = findDevice?.deviceToken ?? "";
     let title = "New Message";
     let body = "You have received a new message";
     let type = "chat";
 
     await sendNotification(token, title, body, type)
-          .then((result) =>
-            console.log(
-              "New Message notification sent",
-              result
-            )
-          )
-          .catch((err) =>
-            console.log("Push Deliver notification to store Error", err)
-          );
-      
+      .then((result) => console.log("New Message notification sent", result))
+      .catch((err) =>
+        console.log("Push Deliver notification to store Error", err)
+      );
 
     res.status(201).json({
       message: "Chat Initiated..!",
@@ -345,6 +352,12 @@ export const connect = async (req, res) => {
 export const getChats = async (req, res) => {
   try {
     const { user } = req.query;
+
+    let findUser = await User.findById(user);
+
+    if (!findUser) throw new Error("User not found");
+
+    if (findUser.isDeleted) throw new Error("User is blocked");
 
     console.log("get chats api called", req.query);
 
@@ -376,15 +389,20 @@ export const createPost = async (req, res) => {
 
     console.log("create post api called", req.body);
 
+    let findUser = await User.findById(userId);
+
+    if (!findUser) throw new Error("User not found");
+
+    if (findUser.isDeleted) throw new Error("User is blocked");
+
     if (!userId || !title || !description)
       throw new Error("All fields are required!");
 
-      if(lat == 0 || long == 0) {
-        let findUser = await User.findById(userId);
-        lat = findUser?.location?.coordinates[1] ?? 0.0;
-        long = findUser?.location?.coordinates[2] ?? 0.0;
-      }
-  
+    if (lat == 0 || long == 0) {
+      let findUser = await User.findById(userId);
+      lat = findUser?.location?.coordinates[1] ?? 0.0;
+      long = findUser?.location?.coordinates[2] ?? 0.0;
+    }
 
     let file = req.files;
     // console.log(file);
@@ -392,7 +410,11 @@ export const createPost = async (req, res) => {
 
     for (let i = 0; i < file.length; i++) {
       const data = file[i];
-      const result = await s3Uploader(data,`surplus/${userId}${Date.now().toString()}.png`, "api");
+      const result = await s3Uploader(
+        data,
+        `surplus/${userId}${Date.now().toString()}.png`,
+        "api"
+      );
       // console.log(result);
       pics.push(result);
     }
@@ -410,45 +432,41 @@ export const createPost = async (req, res) => {
       },
     });
 
-    let findNearByUsers = await User.aggregate([
-      {
-        $geoNear: {
-          near: {
-            type: "Point",
-            coordinates: [parseFloat(long), parseFloat(lat)],
+    let findNearByUsers =
+      (await User.aggregate([
+        {
+          $geoNear: {
+            near: {
+              type: "Point",
+              coordinates: [parseFloat(long), parseFloat(lat)],
+            },
+            key: "location",
+            maxDistance: 4220,
+            distanceField: "dist.calculated",
+            spherical: true,
           },
-          key: "location",
-          maxDistance: 4220,
-          distanceField: "dist.calculated",
-          spherical: true,
         },
-      },
-    ]) ?? [];
+      ])) ?? [];
 
     let devices = [];
 
     for (let user of findNearByUsers) {
-      let userDevices = user.devices  ?? [];
+      let userDevices = user.devices ?? [];
       let lastDevice = userDevices[userDevices.length - 1];
       if (lastDevice) devices.push(lastDevice);
     }
 
     for (let device of devices) {
-      let findDevice = await DeviceInfo.findById(device) ?? {};
+      let findDevice = (await DeviceInfo.findById(device)) ?? {};
       let token = findDevice?.deviceToken;
       let title = "New Blessing";
       let body = "New blessing posted near you";
       let type = "post";
       await sendNotification(token, title, body, type)
-          .then((result) =>
-            console.log(
-               "New Blessing notification sent",
-              result
-            )
-          )
-          .catch((err) =>
-            console.log("Push Deliver notification to store Error", err)
-          );
+        .then((result) => console.log("New Blessing notification sent", result))
+        .catch((err) =>
+          console.log("Push Deliver notification to store Error", err)
+        );
     }
 
     return res.status(201).json(newPost);
@@ -463,6 +481,12 @@ export const createPost = async (req, res) => {
 export const getPosts = async (req, res) => {
   try {
     const { userId } = req.query;
+
+    let findUser = await User.findById(userId);
+
+    if (!findUser) throw new Error("User not found");
+
+    if (findUser.isDeleted) throw new Error("User is blocked");
 
     console.log("get posts api called", req.query);
 
@@ -485,6 +509,14 @@ export const updatePost = async (req, res) => {
   try {
     const { title, description, images, postId } = req.body;
 
+    let findPost = await Post.findById(postId);
+
+    let findUser = await User.findById(findPost.userId);
+
+    if (!findUser) throw new Error("User not found");
+
+    if (findUser.isDeleted) throw new Error("User is blocked");
+
     console.log("update post api called", req.body);
     let file = req.files;
 
@@ -493,7 +525,11 @@ export const updatePost = async (req, res) => {
 
     for (let i = 0; i < file.length; i++) {
       const data = file[i];
-      const result = await s3Uploader(data,`surplus/${postId}${Date.now().toString()}`, "api");
+      const result = await s3Uploader(
+        data,
+        `surplus/${postId}${Date.now().toString()}`,
+        "api"
+      );
       pics.push(result);
     }
 
@@ -526,10 +562,17 @@ export const updatePost = async (req, res) => {
 // delete post
 export const deletePost = async (req, res) => {
   try {
-    const {postId} = req.body;
+    const { postId } = req.body;
 
     console.log("delete post api called", req.body);
 
+    let findPost = await Post.findById(postId);
+
+    let findUser = await User.findById(findPost.userId);
+
+    if (!findUser) throw new Error("User not found");
+
+    if (findUser.isDeleted) throw new Error("User is blocked");
 
     let post = await Post.findOneAndUpdate(
       { _id: postId },
@@ -554,7 +597,7 @@ export const getPostsNearBy = async (req, res) => {
     let userId = req.query.userId ?? "";
     let range = req.query.range ?? 5000;
 
-    if(range){
+    if (range) {
       let updateUserRange = await User.findOneAndUpdate(
         { _id: userId },
         { range: range },
@@ -568,17 +611,15 @@ export const getPostsNearBy = async (req, res) => {
 
     if (parseFloat(lat) === 0.0 && parseFloat(long) === 0.0) {
       // Your logic here to handle lat and long being 0.0
-      console.log("Bonuse called, changing the lat long--------------------------------")
+      console.log(
+        "Bonuse called, changing the lat long--------------------------------"
+      );
       let findUser = await User.findById(userId);
       lat = findUser?.location?.coordinates[1] ?? 0.0;
       long = findUser?.location?.coordinates[0] ?? 0.0;
 
       console.log("lat long overrinden bonus", lat, long);
-
     }
-
-    
-    
 
     let posts = await Post.aggregate([
       {
@@ -595,7 +636,9 @@ export const getPostsNearBy = async (req, res) => {
       },
     ]);
 
-    posts = posts.filter((post) => post.userId != userId && post.isDeleted == false);
+    posts = posts.filter(
+      (post) => post.userId != userId && post.isDeleted == false
+    );
 
     return res.status(200).json(posts);
   } catch (err) {
@@ -615,8 +658,11 @@ export const searchPost = async (req, res) => {
 
     console.log("search post api called", req.query);
 
-
     let findUser = await User.findById(userId);
+
+    if (!findUser) throw new Error("User not found");
+
+    if (findUser.isDeleted) throw new Error("User is blocked");
 
     if (
       name?.length == 0 ||
@@ -631,7 +677,7 @@ export const searchPost = async (req, res) => {
 
     if (parseFloat(lat) === 0.0 && parseFloat(long) === 0.0) {
       // Your logic here to handle lat and long being 0.0
-      console.log("Bonuse called, changing the lat long")
+      console.log("Bonuse called, changing the lat long");
       let findUser = await User.findById(userId);
       lat = findUser?.location?.coordinates[1] ?? 0.0;
       long = findUser?.location?.coordinates[0] ?? 0.0;
@@ -645,7 +691,7 @@ export const searchPost = async (req, res) => {
             coordinates: [parseFloat(long), parseFloat(lat)],
           },
           key: "location",
-          maxDistance: (findUser?.range * 1000) ?? 5000,
+          maxDistance: findUser?.range * 1000 ?? 5000,
           distanceField: "dist.calculated",
           spherical: true,
         },
@@ -680,6 +726,12 @@ export const blessPost = async (req, res) => {
 
     console.log("bless post api called", req.body);
 
+    let findUser = await User.findById(userId);
+
+    if (!findUser) throw new Error("User not found");
+
+    if (findUser.isDeleted) throw new Error("User is blocked");
+
     let findPost = await Post.findById(postId);
 
     if (!findPost) throw new Error("Post not found");
@@ -698,21 +750,19 @@ export const blessPost = async (req, res) => {
     }
 
     console.log("Blessed by user");
-   await Post.findOneAndUpdate(
+    await Post.findOneAndUpdate(
       { _id: postId },
       { $addToSet: { blessedBy: userId } },
       { new: true }
     );
 
-    let toUser = await User.findOne(
-      { _id: findPost.userId }
-    );
+    let toUser = await User.findOne({ _id: findPost.userId });
 
     let devices = toUser?.devices ?? [];
 
     let lastDevice = devices[devices.length - 1];
 
-    let findDevice = await DeviceInfo.findById(lastDevice) ?? {};
+    let findDevice = (await DeviceInfo.findById(lastDevice)) ?? {};
 
     let token = findDevice?.deviceToken ?? "";
     console.log("token", token);
@@ -722,15 +772,10 @@ export const blessPost = async (req, res) => {
     let type = "bless";
 
     await sendNotification(token, title, body, type)
-          .then((result) =>
-            console.log(
-              "User blessed notification sent !",
-              result
-            )
-          )
-          .catch((err) =>
-            console.log("Push Deliver notification to store Error", err)
-          );
+      .then((result) => console.log("User blessed notification sent !", result))
+      .catch((err) =>
+        console.log("Push Deliver notification to store Error", err)
+      );
     return res.status(200).json({ message: "Blessed successfully" });
   } catch (err) {
     return res.status(500).json({
@@ -742,7 +787,7 @@ export const blessPost = async (req, res) => {
 // get post by id
 export const getPost = async (req, res) => {
   try {
-    let post = await Post.findById(req.query.postId)
+    let post = await Post.findById(req.query.postId);
 
     console.log("get post api called", req.query.postId);
 
@@ -756,22 +801,21 @@ export const getPost = async (req, res) => {
   }
 };
 
-
 // get user by id
 export const getUserById = async (req, res) => {
-  try{
-
-    const {userId} = req.query;
+  try {
+    const { userId } = req.query;
 
     console.log("get user by id api called", req.query);
 
     let user = await User.findById(userId);
 
-    if(!user) throw new Error("User not found");
+    if (!user) throw new Error("User not found");
+
+    if (user.isDeleted) throw new Error("User is blocked");
 
     return res.status(200).json(user);
-
-  }catch(err){
+  } catch (err) {
     return res.status(500).json({
       message: err.message,
     });

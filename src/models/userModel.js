@@ -47,6 +47,11 @@ const userSchema = new mongoose.Schema(
         ref: "DeviceInfo",
       },
     ],
+    isAdmin : {
+      type: Boolean,
+      required: false,
+      default: false,
+    }
   },
   { timestamps: true, versionKey: false }
 );
